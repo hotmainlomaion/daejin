@@ -1,4 +1,4 @@
-import { movingAverage } from '../indicators.ts';
+import { movingAverage } from '../ta/index.ts';
 import { checkStopLossTakeProfit } from '../risk.ts';
 import type { Candle, Evaluate, MaCrossoverParams, Signal } from '../types.ts';
 

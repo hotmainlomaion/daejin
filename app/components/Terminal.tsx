@@ -6,7 +6,15 @@ import type { BotEvent, Candle } from '@futureslab/shared';
 import { saveBotConfig, setBotStatus } from '@/app/actions';
 import { BotPanel, type BotConfig } from '@/components/BotPanel';
 import { BottomTabs, type PositionView, type TradeView } from '@/components/BottomTabs';
-import { PriceChart, type SubIndicator, type TradeMarker } from '@/components/PriceChart';
+import { PriceChart, type TradeMarker } from '@/components/PriceChart';
+import {
+  MAIN_INDICATORS,
+  SUB_INDICATORS,
+  mainMeta,
+  subMeta,
+  type MainIndicator,
+  type SubIndicator,
+} from '@/lib/indicators';
 import { TestnetNotice } from '@/components/TestnetNotice';
 import { useBotStream } from '@/lib/useBotStream';
 
@@ -66,6 +74,7 @@ export function Terminal({
   const [loadError, setLoadError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [subIndicator, setSubIndicator] = useState<SubIndicator>('volume');
+  const [mainIndicator, setMainIndicator] = useState<MainIndicator>('none');
 
   const { events, connected } = useBotStream(bot.id, initialEvents);
 
@@ -243,29 +252,50 @@ export function Terminal({
               </span>
             )}
 
-            {/* 보조지표 — 참고용 시각화이며 봇의 판단에는 쓰이지 않는다 */}
-            <div className="ml-auto flex items-center gap-1">
-              <span className="mr-1 text-[10px] text-faint">보조지표</span>
-              {(
-                [
-                  ['none', '없음'],
-                  ['volume', '거래량'],
-                  ['rsi', 'RSI'],
-                ] as const
-              ).map(([key, label]) => (
-                <button
-                  key={key}
-                  type="button"
-                  onClick={() => setSubIndicator(key)}
-                  className={`rounded px-2 py-1 text-xs transition ${
-                    subIndicator === key ? 'bg-elevated text-ink' : 'text-muted hover:text-ink'
-                  }`}
+            {/* 지표 — 바이낸스 자체 메뉴 기준(19종).
+                참고용 시각화이며 봇의 판단에는 쓰이지 않는다 (가드레일 2). */}
+            <div className="ml-auto flex items-center gap-2">
+              <label className="flex items-center gap-1">
+                <span className="text-[10px] text-faint">메인</span>
+                <select
+                  value={mainIndicator}
+                  onChange={(e) => setMainIndicator(e.target.value as MainIndicator)}
+                  className="rounded bg-elevated px-1.5 py-1 text-xs outline-none"
+                  title={mainMeta(mainIndicator).desc}
                 >
-                  {label}
-                </button>
-              ))}
+                  {MAIN_INDICATORS.map(({ key, meta }) => (
+                    <option key={key} value={key}>
+                      {meta.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="flex items-center gap-1">
+                <span className="text-[10px] text-faint">보조</span>
+                <select
+                  value={subIndicator}
+                  onChange={(e) => setSubIndicator(e.target.value as SubIndicator)}
+                  className="rounded bg-elevated px-1.5 py-1 text-xs outline-none"
+                  title={subMeta(subIndicator).desc}
+                >
+                  {SUB_INDICATORS.map(({ key, meta }) => (
+                    <option key={key} value={key}>
+                      {meta.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
             </div>
           </div>
+
+          {/* 선택한 지표가 무엇을 계산하는지 — 매매 판단은 말하지 않는다 (가드레일 2·3) */}
+          {(mainIndicator !== 'none' || subIndicator !== 'none') && (
+            <p className="border-b border-line px-4 py-1 text-[10px] leading-relaxed text-faint">
+              {mainIndicator !== 'none' && <>{mainMeta(mainIndicator).label}: {mainMeta(mainIndicator).desc}</>}
+              {mainIndicator !== 'none' && subIndicator !== 'none' && ' · '}
+              {subIndicator !== 'none' && <>{subMeta(subIndicator).label}: {subMeta(subIndicator).desc}</>}
+            </p>
+          )}
 
           <div className="min-h-[280px] flex-1">
             {loadError ? (
@@ -279,6 +309,7 @@ export function Terminal({
                 slowPeriod={config.slowPeriod}
                 maType={config.maType}
                 trades={markers}
+                mainIndicator={mainIndicator}
                 subIndicator={subIndicator}
               />
             )}

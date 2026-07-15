@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ema, maSeries, rsi, rsiSeries, sma } from './indicators.ts';
+import { ema, maSeries, rsi, rsiSeries, sma } from './index.ts';
 
 describe('sma', () => {
   it('마지막 period개의 산술 평균을 낸다', () => {

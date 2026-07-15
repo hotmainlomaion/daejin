@@ -10,7 +10,8 @@ export type {
   SignalAction,
 } from './types.ts';
 
-export { ema, maSeries, movingAverage, rsi, rsiSeries, sma } from './indicators.ts';
+// 지표 전체 재노출 — 바이낸스 자체 메뉴 19종 (상세는 ta/index.ts 참조)
+export * from './ta/index.ts';
 export {
   ALLOWED_REST_HOSTS,
   ALLOWED_WS_HOSTS,
