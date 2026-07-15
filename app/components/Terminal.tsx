@@ -6,7 +6,7 @@ import type { BotEvent, Candle } from '@futureslab/shared';
 import { saveBotConfig, setBotStatus } from '@/app/actions';
 import { BotPanel, type BotConfig } from '@/components/BotPanel';
 import { BottomTabs, type PositionView, type TradeView } from '@/components/BottomTabs';
-import { PriceChart, type TradeMarker } from '@/components/PriceChart';
+import { PriceChart, type SubIndicator, type TradeMarker } from '@/components/PriceChart';
 import { TestnetNotice } from '@/components/TestnetNotice';
 import { useBotStream } from '@/lib/useBotStream';
 
@@ -65,6 +65,7 @@ export function Terminal({
   const [pending, setPending] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [subIndicator, setSubIndicator] = useState<SubIndicator>('volume');
 
   const { events, connected } = useBotStream(bot.id, initialEvents);
 
@@ -241,6 +242,29 @@ export function Terminal({
                 차트만 {timeframe}로 보는 중 — 봇은 {bot.timeframe} 기준으로 판단합니다
               </span>
             )}
+
+            {/* 보조지표 — 참고용 시각화이며 봇의 판단에는 쓰이지 않는다 */}
+            <div className="ml-auto flex items-center gap-1">
+              <span className="mr-1 text-[10px] text-faint">보조지표</span>
+              {(
+                [
+                  ['none', '없음'],
+                  ['volume', '거래량'],
+                  ['rsi', 'RSI'],
+                ] as const
+              ).map(([key, label]) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setSubIndicator(key)}
+                  className={`rounded px-2 py-1 text-xs transition ${
+                    subIndicator === key ? 'bg-elevated text-ink' : 'text-muted hover:text-ink'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
           </div>
 
           <div className="min-h-[280px] flex-1">
@@ -255,17 +279,29 @@ export function Terminal({
                 slowPeriod={config.slowPeriod}
                 maType={config.maType}
                 trades={markers}
+                subIndicator={subIndicator}
               />
             )}
           </div>
 
-          <div className="h-[230px] shrink-0 border-t border-line">
+          <div className="h-[290px] shrink-0 border-t border-line">
             <BottomTabs
               positions={livePositions}
               trades={trades}
               events={events}
               connected={connected}
               botError={bot.lastError}
+              watch={{
+                candles,
+                fastPeriod: config.fastPeriod,
+                slowPeriod: config.slowPeriod,
+                maType: config.maType,
+                onDeadCross: config.onDeadCross,
+                currentPrice: price,
+                stopLossPct: config.stopLossPct,
+                takeProfitPct: config.takeProfitPct,
+                status: bot.status,
+              }}
             />
           </div>
         </div>

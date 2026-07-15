@@ -10,7 +10,7 @@ export type {
   SignalAction,
 } from './types.ts';
 
-export { ema, maSeries, movingAverage, sma } from './indicators.ts';
+export { ema, maSeries, movingAverage, rsi, rsiSeries, sma } from './indicators.ts';
 export {
   ALLOWED_REST_HOSTS,
   ALLOWED_WS_HOSTS,

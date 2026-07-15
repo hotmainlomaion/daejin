@@ -1,8 +1,9 @@
 'use client';
 
 import { useState } from 'react';
-import type { BotEvent } from '@futureslab/shared';
+import type { BotEvent, Candle } from '@futureslab/shared';
 import { ActivityLog } from '@/components/ActivityLog';
+import { BotWatch } from '@/components/BotWatch';
 
 export interface PositionView {
   symbol: string;
@@ -29,23 +30,37 @@ export function BottomTabs({
   events,
   connected,
   botError,
+  watch,
 }: {
   positions: PositionView[];
   trades: TradeView[];
   events: BotEvent[];
   connected: boolean;
   botError?: string | null;
+  /** "봇의 눈" 탭에 필요한 값들 */
+  watch: {
+    candles: Candle[];
+    fastPeriod: number;
+    slowPeriod: number;
+    maType: 'SMA' | 'EMA';
+    onDeadCross: 'SHORT' | 'CLOSE_ONLY';
+    currentPrice: number | null;
+    stopLossPct: number;
+    takeProfitPct: number;
+    status: 'stopped' | 'running' | 'error';
+  };
 }) {
-  // 기본 탭이 "봇 활동"인 이유: 포지션은 대부분 비어 있고, 유저가 실제로 지켜보는 건
-  // 봇이 매 캔들 무슨 판단을 하는지다.
-  const [tab, setTab] = useState<'activity' | 'positions' | 'trades'>('activity');
+  // 기본 탭이 "봇의 눈"인 이유: 선물을 모르는 유저에게는 로그 목록보다
+  // "지금 뭘 기다리는 중인지"가 먼저 보여야 한다.
+  const [tab, setTab] = useState<'watch' | 'activity' | 'positions' | 'trades'>('watch');
 
   return (
     <section className="flex h-full flex-col bg-panel">
       <div className="flex items-center gap-4 border-b border-line px-4">
         {(
           [
-            ['activity', '봇 활동'],
+            ['watch', '봇의 눈'],
+            ['activity', '활동 기록'],
             ['positions', `포지션 (${positions.length})`],
             ['trades', `체결 내역 (${trades.length})`],
           ] as const
@@ -62,7 +77,7 @@ export function BottomTabs({
           >
             {label}
             {/* 실시간 연결 표시 — 봇이 뭔가 하면 화면이 즉시 반응한다는 신호 */}
-            {key === 'activity' && (
+            {key === 'watch' && (
               <span
                 className={`h-1.5 w-1.5 rounded-full ${connected ? 'bg-long' : 'bg-faint'}`}
                 title={connected ? '실시간 연결됨' : '연결 대기'}
@@ -79,7 +94,20 @@ export function BottomTabs({
       )}
 
       <div className="flex-1 overflow-auto">
-        {tab === 'activity' ? (
+        {tab === 'watch' ? (
+          <BotWatch
+            candles={watch.candles}
+            fastPeriod={watch.fastPeriod}
+            slowPeriod={watch.slowPeriod}
+            maType={watch.maType}
+            onDeadCross={watch.onDeadCross}
+            position={positions[0] ?? null}
+            currentPrice={watch.currentPrice}
+            stopLossPct={watch.stopLossPct}
+            takeProfitPct={watch.takeProfitPct}
+            status={watch.status}
+          />
+        ) : tab === 'activity' ? (
           <ActivityLog events={events} />
         ) : tab === 'positions' ? (
           positions.length === 0 ? (
