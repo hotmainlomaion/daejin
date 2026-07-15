@@ -30,6 +30,29 @@ export interface Signal {
   reason: string;
 }
 
+/**
+ * 봇 이벤트의 종류. SignalAction에 'ERROR'를 더한 것으로,
+ * 시그널로 표현되지 않는 워커 측 오류까지 화면에 남기기 위함이다.
+ * DB의 public.bot_event_action enum과 값이 일치해야 한다.
+ */
+export type BotEventAction = SignalAction | 'ERROR';
+
+/**
+ * 봇이 캔들을 평가할 때마다 남기는 판단 근거 한 건 (DB: public.bot_events).
+ * 체결이 없어도 기록되므로, 유저는 이걸로 봇이 살아있는지 확인한다.
+ */
+export interface BotEvent {
+  id: string;
+  botId: string;
+  action: BotEventAction;
+  /** 한국어 사유. 전략의 Signal.reason이 그대로 들어온다. */
+  reason: string;
+  /** 평가 시점의 확정 종가. 가격을 알 수 없는 경우 null. */
+  price: number | null;
+  /** 기록 시각 (ISO 8601 문자열) */
+  createdAt: string;
+}
+
 /** 현재 보유 포지션. 없으면 null. */
 export interface Position {
   side: 'LONG' | 'SHORT';

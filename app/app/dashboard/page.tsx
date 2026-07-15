@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { MA_CROSSOVER_DEFAULTS } from '@futureslab/shared';
+import { MA_CROSSOVER_DEFAULTS, type BotEvent } from '@futureslab/shared';
 import { Terminal, type TerminalBot } from '@/components/Terminal';
 import type { PositionView, TradeView } from '@/components/BottomTabs';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
@@ -37,9 +37,17 @@ export default async function DashboardPage() {
   const row = (data?.[0] ?? null) as BotRow | null;
   if (!row) redirect('/bots/new');
 
-  const [{ data: positions }, { data: trades }] = await Promise.all([
+  const [{ data: positions }, { data: trades }, { data: events }] = await Promise.all([
     supabase.from('positions').select('*').eq('bot_id', row.id),
     supabase.from('trades').select('*').eq('bot_id', row.id).order('executed_at', { ascending: false }).limit(100),
+    // 최근 100건만. 그 이상은 화면에서 의미가 없고, 이벤트는 계속 쌓인다
+    // (보존 정책은 마이그레이션의 TODO(confirm) 참조).
+    supabase
+      .from('bot_events')
+      .select('*')
+      .eq('bot_id', row.id)
+      .order('created_at', { ascending: false })
+      .limit(100),
   ]);
 
   const p = (row.strategies?.params ?? {}) as Record<string, unknown>;
@@ -79,9 +87,26 @@ export default async function DashboardPage() {
     executedAt: x.executed_at,
   }));
 
+  const eventViews: BotEvent[] = (events ?? []).map((x) => ({
+    id: x.id,
+    botId: x.bot_id,
+    action: x.action,
+    reason: x.reason,
+    price: x.price === null ? null : Number(x.price),
+    createdAt: x.created_at,
+  }));
+
   return (
     <>
-      <Terminal bot={bot} positions={positionViews} trades={tradeViews} />
+      <Terminal
+        bot={bot}
+        positions={positionViews}
+        trades={tradeViews}
+        events={eventViews}
+        // 잔고는 유저 키를 복호화해야 얻을 수 있어 클라이언트가 /api/account로 가져온다.
+        // 서버 컴포넌트에서 하면 첫 페인트가 바이낸스 응답만큼 늦어진다.
+        account={null}
+      />
       {/* 봇이 하나뿐인 MVP라 목록 화면 대신 새 봇 만들기 링크만 둔다 */}
       <Link
         href="/bots/new"

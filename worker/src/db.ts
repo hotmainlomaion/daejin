@@ -79,6 +79,30 @@ export async function insertTrade(
   if (error) throw new Error(`체결 기록 실패: ${error.message}`);
 }
 
+/**
+ * 봇의 판단 근거를 기록한다 (HOLD 포함).
+ *
+ * HOLD도 남기는 이유: 15분봉이면 체결이 몇 시간에 한 번인데, 그 사이 화면이 죽어 보인다.
+ * "교차 없음 — 대기 중"이 매 캔들 찍혀야 유저가 봇이 살아있다는 걸 안다.
+ * reason은 그대로 유저에게 보이므로 시크릿을 넣지 않는다 (가드레일 8).
+ */
+export async function insertBotEvent(
+  db: SupabaseClient,
+  event: {
+    bot_id: string;
+    action: 'LONG' | 'SHORT' | 'CLOSE' | 'HOLD' | 'ERROR';
+    reason: string;
+    price: number | null;
+  },
+): Promise<void> {
+  const { error } = await db.from('bot_events').insert({
+    ...event,
+    reason: event.reason.slice(0, 500),
+  });
+  // 로그 기록 실패로 봇을 멈추지는 않는다 — 기록은 부가 기능이다.
+  if (error) console.warn(`봇 이벤트 기록 실패: ${error.message}`);
+}
+
 export async function upsertPosition(
   db: SupabaseClient,
   position: {

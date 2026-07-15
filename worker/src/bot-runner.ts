@@ -27,6 +27,7 @@ import {
   deletePosition,
   fetchExchangeKey,
   fetchStrategy,
+  insertBotEvent,
   insertTrade,
   markBotError,
   upsertPosition,
@@ -68,6 +69,13 @@ export class BotRunner {
       const reason = err instanceof Error ? err.message : String(err);
       log.error(`봇 ${this.bot.id} 기동 실패`, err);
       await markBotError(this.db, this.bot.id, reason);
+      // 기동 실패 사유도 활동 로그에 남긴다 — 콘솔은 유저가 못 본다.
+      await insertBotEvent(this.db, {
+        bot_id: this.bot.id,
+        action: 'ERROR',
+        reason,
+        price: null,
+      });
       return;
     }
 
@@ -115,6 +123,25 @@ export class BotRunner {
     const info = await this.client.exchangeInfo();
     this.rules = extractSymbolRules(info, this.bot.symbol);
 
+    // ⚠️ 이미 열려 있는 포지션이 있으면 기동하지 않는다.
+    //
+    // 워커는 positionRisk에 보이는 포지션을 자기 것으로 간주한다. 유저가 직접 연 포지션이나
+    // 다른 봇의 포지션이 있으면 그걸 자기 것으로 착각해서 손절/익절 조건에 걸리는 순간
+    // 청산해버린다. 더 나쁜 건 대시보드 손익이 전략의 성과가 아니게 되어
+    // "전략 검증"이라는 제품 전제 자체가 무너진다는 점이다.
+    //
+    // MVP는 계정·심볼당 봇 1개만 지원한다. 여기서 막고 유저에게 정리를 요구한다.
+    // TODO(confirm): v2에서 다중 봇을 지원하려면 봇별 포지션 격리가 필요하다.
+    //   바이낸스 선물의 클라이언트 주문 ID(newClientOrderId)로 출처를 추적하는 방식이 후보.
+    const existing = await this.fetchPositionRaw();
+    if (existing !== null) {
+      throw new Error(
+        `${this.bot.symbol}에 이미 포지션이 열려 있습니다 (${existing.side} ${existing.qty}). ` +
+          '봇은 자기가 연 포지션만 관리할 수 있습니다. ' +
+          '테스트넷에서 해당 포지션을 정리한 뒤 다시 시작하세요.',
+      );
+    }
+
     await this.client.setLeverage(this.bot.symbol, this.bot.leverage);
 
     this.candles = await this.client.klines(this.bot.symbol, this.bot.timeframe, WARMUP_CANDLES);
@@ -134,11 +161,25 @@ export class BotRunner {
         log.info(`봇 ${this.bot.id} 시그널: ${signal.action} — ${signal.reason}`);
       }
 
+      // 판단 근거를 매 캔들 남긴다 — 유저가 화면에서 봇의 사고 과정을 본다.
+      await insertBotEvent(this.db, {
+        bot_id: this.bot.id,
+        action: signal.action,
+        reason: signal.reason,
+        price: candle.close,
+      });
+
       await this.executeSignal(signal, position, candle.close);
       await this.syncPosition();
     } catch (err) {
       const reason = err instanceof Error ? err.message : String(err);
       log.error(`봇 ${this.bot.id} 평가 실패`, err);
+      await insertBotEvent(this.db, {
+        bot_id: this.bot.id,
+        action: 'ERROR',
+        reason,
+        price: candle.close,
+      });
       // 주문 거절(잔고 부족 등)로 봇 전체를 죽이지는 않는다. 다음 캔들에서 다시 시도한다.
       // 인증 오류처럼 복구 불가한 것만 봇을 내린다.
       if (err instanceof BinanceApiError && isFatal(err)) {
@@ -165,6 +206,11 @@ export class BotRunner {
 
   /** 신뢰 원천은 테스트넷이다. 워커 메모리를 믿지 않는다. */
   private async fetchPosition(): Promise<Position | null> {
+    return this.fetchPositionRaw();
+  }
+
+  /** bootstrap에서도 쓰기 위해 client! 단언 없이 분리해둔 조회. */
+  private async fetchPositionRaw(): Promise<Position | null> {
     const risks = await this.client!.positionRisk(this.bot.symbol);
     const risk = risks.find((r) => r.symbol === this.bot.symbol);
     if (!risk) return null;

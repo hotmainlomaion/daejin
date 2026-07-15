@@ -1,13 +1,14 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import type { Candle } from '@futureslab/shared';
+import type { BotEvent, Candle } from '@futureslab/shared';
 import { saveBotConfig, setBotStatus } from '@/app/actions';
 import { BotPanel, type BotConfig } from '@/components/BotPanel';
 import { BottomTabs, type PositionView, type TradeView } from '@/components/BottomTabs';
 import { PriceChart, type TradeMarker } from '@/components/PriceChart';
 import { TestnetNotice } from '@/components/TestnetNotice';
+import { useBotStream } from '@/lib/useBotStream';
 
 export interface TerminalBot {
   id: string;
@@ -19,41 +20,60 @@ export interface TerminalBot {
   config: BotConfig;
 }
 
+export interface AccountView {
+  walletBalance: number;
+  availableBalance: number;
+  unrealizedPnl: number;
+}
+
 const SYMBOLS = ['BTCUSDT', 'ETHUSDT'];
 const TIMEFRAMES = ['1m', '5m', '15m', '1h', '4h'];
 
+/** 마크 가격 폴링 주기. 손익이 살아 움직이는 느낌을 주되 과하지 않게. */
+const TICKER_MS = 3_000;
+/** 캔들 갱신 주기. 봇이 종가에만 판단하므로 초 단위일 필요가 없다. */
+const CANDLE_MS = 15_000;
+
 /**
- * 트레이딩 터미널 화면 (CLAUDE.md §디자인 톤 — KuCoin Futures Lite 기준).
+ * 트레이딩 터미널 (CLAUDE.md §디자인 톤 — KuCoin Futures Lite 기준).
  *
- * 레이아웃: 상단 가격 헤더 · 좌측 차트 · 우측 봇 설정 패널 · 하단 포지션/체결 탭.
- * 거래소와 다른 점은 우측 패널이 "주문"이 아니라 "봇 설정"이라는 것.
+ * 실시간성은 세 갈래로 나뉜다:
+ *  - 마크 가격 → 3초 폴링. 미실현 손익이 초 단위로 움직인다.
+ *  - 캔들      → 15초 폴링. 봇이 종가에만 판단하므로 이 정도면 충분하다.
+ *  - 봇의 행동 → Supabase Realtime. 워커가 DB에 쓰는 순간 화면이 반응한다 (폴링 아님).
  */
 export function Terminal({
   bot,
   positions,
   trades,
+  events: initialEvents,
+  account: initialAccount,
 }: {
   bot: TerminalBot;
   positions: PositionView[];
   trades: TradeView[];
+  events: BotEvent[];
+  account: AccountView | null;
 }) {
   const router = useRouter();
   const [symbol, setSymbol] = useState(bot.symbol);
   const [timeframe, setTimeframe] = useState(bot.timeframe);
   const [candles, setCandles] = useState<Candle[]>([]);
+  const [markPrice, setMarkPrice] = useState<number | null>(null);
+  const [account, setAccount] = useState<AccountView | null>(initialAccount);
   const [config, setConfig] = useState<BotConfig>(bot.config);
   const [pending, setPending] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
+  const { events, connected } = useBotStream(bot.id, initialEvents);
+
+  // ── 캔들 ───────────────────────────────────────────────
   const loadCandles = useCallback(async () => {
     try {
       const res = await fetch(`/api/klines?symbol=${symbol}&interval=${timeframe}&limit=200`);
       const json = await res.json();
-      if (!res.ok) {
-        setLoadError(json.error ?? '시세를 불러오지 못했습니다.');
-        return;
-      }
+      if (!res.ok) return setLoadError(json.error ?? '시세를 불러오지 못했습니다.');
       setCandles(json.candles);
       setLoadError(null);
     } catch {
@@ -63,15 +83,77 @@ export function Terminal({
 
   useEffect(() => {
     void loadCandles();
-    // 캔들 종가마다 평가하는 제품이므로 초 단위 갱신은 불필요하다. 15초 폴링으로 충분.
-    const timer = setInterval(() => void loadCandles(), 15_000);
+    const timer = setInterval(() => void loadCandles(), CANDLE_MS);
     return () => clearInterval(timer);
   }, [loadCandles]);
 
-  const last = candles[candles.length - 1];
+  // ── 마크 가격 (실시간 손익용) ──────────────────────────
+  useEffect(() => {
+    let alive = true;
+    const tick = async () => {
+      try {
+        const res = await fetch(`/api/ticker?symbol=${symbol}`);
+        if (!res.ok) return;
+        const json = await res.json();
+        if (alive) setMarkPrice(json.markPrice);
+      } catch {
+        // 일시적 실패는 무시한다 — 다음 주기에 다시 받는다
+      }
+    };
+    void tick();
+    const timer = setInterval(() => void tick(), TICKER_MS);
+    return () => {
+      alive = false;
+      clearInterval(timer);
+    };
+  }, [symbol]);
+
+  // ── 계정 잔고 ──────────────────────────────────────────
+  const loadAccount = useCallback(async () => {
+    try {
+      const res = await fetch('/api/account');
+      if (!res.ok) return;
+      setAccount(await res.json());
+    } catch {
+      // 잔고 조회 실패로 화면을 막지 않는다
+    }
+  }, []);
+
+  useEffect(() => {
+    const timer = setInterval(() => void loadAccount(), 10_000);
+    return () => clearInterval(timer);
+  }, [loadAccount]);
+
+  // ── 파생값 ─────────────────────────────────────────────
+  const lastCandle = candles[candles.length - 1];
+  const price = markPrice ?? lastCandle?.close ?? null;
   const first = candles[0];
-  const changePct = last && first ? ((last.close - first.open) / first.open) * 100 : 0;
+  const changePct = price && first ? ((price - first.open) / first.open) * 100 : 0;
   const up = changePct >= 0;
+
+  /**
+   * 미실현 손익을 마크 가격으로 다시 계산한다.
+   * DB의 값은 워커가 캔들 종가마다 갱신하므로 15분봉이면 15분 동안 멈춰 있다.
+   * 화면에서는 초 단위로 움직여야 "실시간으로 돌고 있다"는 게 보인다.
+   * (수량 부호가 방향을 담고 있어 롱/숏 모두 같은 식으로 계산된다)
+   */
+  const livePositions = useMemo<PositionView[]>(() => {
+    if (price === null) return positions;
+    return positions.map((p) => ({
+      ...p,
+      unrealizedPnl: (price - p.entryPrice) * p.qty,
+    }));
+  }, [positions, price]);
+
+  const markers: TradeMarker[] = useMemo(
+    () =>
+      trades.map((t) => ({
+        time: new Date(t.executedAt).getTime(),
+        side: t.side,
+        price: t.price,
+      })),
+    [trades],
+  );
 
   /**
    * 봇 시작 시 패널에서 바꾼 설정을 먼저 저장한다.
@@ -84,10 +166,7 @@ export function Terminal({
       const starting = bot.status !== 'running';
       if (starting) {
         const saved = await saveBotConfig(bot.id, config);
-        if ('error' in saved) {
-          setActionError(saved.error);
-          return;
-        }
+        if ('error' in saved) return setActionError(saved.error);
       }
       const result = await setBotStatus(bot.id, starting ? 'running' : 'stopped');
       if ('error' in result) setActionError(result.error);
@@ -97,16 +176,9 @@ export function Terminal({
     }
   }
 
-  const markers: TradeMarker[] = trades.map((t) => ({
-    time: new Date(t.executedAt).getTime(),
-    side: t.side,
-    price: t.price,
-  }));
-
   return (
     <div className="flex h-screen flex-col bg-canvas">
-      {/* 헤더 */}
-      <header className="flex items-center gap-6 border-b border-line px-4 py-3">
+      <header className="flex items-center gap-5 border-b border-line px-4 py-3">
         <span className="text-sm font-semibold tracking-tight text-brand">FuturesLab</span>
 
         <select
@@ -121,9 +193,9 @@ export function Terminal({
           ))}
         </select>
 
-        <div className="flex items-baseline gap-3">
+        <div className="flex items-baseline gap-2.5">
           <span className={`font-mono text-2xl font-semibold ${up ? 'text-long' : 'text-short'}`}>
-            {last ? last.close.toLocaleString('ko-KR', { maximumFractionDigits: 2 }) : '—'}
+            {price ? price.toLocaleString('ko-KR', { maximumFractionDigits: 2 }) : '—'}
           </span>
           <span className={`font-mono text-sm ${up ? 'text-long' : 'text-short'}`}>
             {up ? '+' : ''}
@@ -131,15 +203,22 @@ export function Terminal({
           </span>
         </div>
 
-        <span className="ml-auto rounded bg-elevated px-2 py-1 text-[11px] text-muted">
-          테스트넷
-        </span>
+        {/* 테스트넷 자산 — KuCoin Lite의 "USDT자산" 자리 */}
+        {account && (
+          <div className="hidden items-baseline gap-2 sm:flex">
+            <span className="text-[11px] text-faint">테스트넷 자산</span>
+            <span className="font-mono text-sm text-ink">
+              {account.walletBalance.toLocaleString('ko-KR', { maximumFractionDigits: 2 })} USDT
+            </span>
+          </div>
+        )}
+
+        <span className="ml-auto rounded bg-elevated px-2 py-1 text-[11px] text-muted">테스트넷</span>
         <StatusBadge status={bot.status} />
       </header>
 
       <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
         <div className="flex min-h-0 flex-1 flex-col">
-          {/* 캔들 주기 */}
           <div className="flex items-center gap-1 border-b border-line px-4 py-1.5">
             {TIMEFRAMES.map((t) => (
               <button
@@ -157,9 +236,13 @@ export function Terminal({
               <span className="text-[#f0b90b]">━</span> {config.maType} {config.fastPeriod}
               <span className="ml-2 text-[#7b61ff]">━</span> {config.maType} {config.slowPeriod}
             </span>
+            {timeframe !== bot.timeframe && (
+              <span className="ml-3 text-[11px] text-[#f0b90b]">
+                차트만 {timeframe}로 보는 중 — 봇은 {bot.timeframe} 기준으로 판단합니다
+              </span>
+            )}
           </div>
 
-          {/* 차트 */}
           <div className="min-h-[280px] flex-1">
             {loadError ? (
               <div className="flex h-full items-center justify-center px-6 text-center text-sm text-short">
@@ -176,13 +259,17 @@ export function Terminal({
             )}
           </div>
 
-          {/* 하단 탭 */}
-          <div className="h-[220px] shrink-0 border-t border-line">
-            <BottomTabs positions={positions} trades={trades} botError={bot.lastError} />
+          <div className="h-[230px] shrink-0 border-t border-line">
+            <BottomTabs
+              positions={livePositions}
+              trades={trades}
+              events={events}
+              connected={connected}
+              botError={bot.lastError}
+            />
           </div>
         </div>
 
-        {/* 우측 봇 패널 */}
         <BotPanel
           config={config}
           onChange={setConfig}
@@ -190,11 +277,11 @@ export function Terminal({
           status={bot.status}
           pending={pending}
           error={actionError}
+          account={account}
           dirty={JSON.stringify(config) !== JSON.stringify(bot.config)}
         />
       </div>
 
-      {/* 테스트넷 한계 고지 — 숨기지 않는다 (CLAUDE.md) */}
       <footer className="border-t border-line px-4 py-2">
         <TestnetNotice variant="inline" />
       </footer>

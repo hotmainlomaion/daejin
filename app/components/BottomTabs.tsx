@@ -1,6 +1,8 @@
 'use client';
 
 import { useState } from 'react';
+import type { BotEvent } from '@futureslab/shared';
+import { ActivityLog } from '@/components/ActivityLog';
 
 export interface PositionView {
   symbol: string;
@@ -24,19 +26,26 @@ export interface TradeView {
 export function BottomTabs({
   positions,
   trades,
+  events,
+  connected,
   botError,
 }: {
   positions: PositionView[];
   trades: TradeView[];
+  events: BotEvent[];
+  connected: boolean;
   botError?: string | null;
 }) {
-  const [tab, setTab] = useState<'positions' | 'trades'>('positions');
+  // 기본 탭이 "봇 활동"인 이유: 포지션은 대부분 비어 있고, 유저가 실제로 지켜보는 건
+  // 봇이 매 캔들 무슨 판단을 하는지다.
+  const [tab, setTab] = useState<'activity' | 'positions' | 'trades'>('activity');
 
   return (
     <section className="flex h-full flex-col bg-panel">
       <div className="flex items-center gap-4 border-b border-line px-4">
         {(
           [
+            ['activity', '봇 활동'],
             ['positions', `포지션 (${positions.length})`],
             ['trades', `체결 내역 (${trades.length})`],
           ] as const
@@ -45,13 +54,20 @@ export function BottomTabs({
             key={key}
             type="button"
             onClick={() => setTab(key)}
-            className={`border-b-2 px-1 py-2.5 text-xs font-medium transition ${
+            className={`flex items-center gap-1.5 border-b-2 px-1 py-2.5 text-xs font-medium transition ${
               tab === key
                 ? 'border-brand text-ink'
                 : 'border-transparent text-muted hover:text-ink'
             }`}
           >
             {label}
+            {/* 실시간 연결 표시 — 봇이 뭔가 하면 화면이 즉시 반응한다는 신호 */}
+            {key === 'activity' && (
+              <span
+                className={`h-1.5 w-1.5 rounded-full ${connected ? 'bg-long' : 'bg-faint'}`}
+                title={connected ? '실시간 연결됨' : '연결 대기'}
+              />
+            )}
           </button>
         ))}
       </div>
@@ -63,7 +79,9 @@ export function BottomTabs({
       )}
 
       <div className="flex-1 overflow-auto">
-        {tab === 'positions' ? (
+        {tab === 'activity' ? (
+          <ActivityLog events={events} />
+        ) : tab === 'positions' ? (
           positions.length === 0 ? (
             <Empty text="보유 중인 포지션이 없습니다. 봇이 진입 조건을 기다리는 중입니다." />
           ) : (

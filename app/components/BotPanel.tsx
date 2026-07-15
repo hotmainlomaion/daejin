@@ -30,6 +30,7 @@ interface Props {
   error?: string | null;
   /** 저장되지 않은 변경이 있는지 — 실행 중 수정은 재시작해야 반영된다는 걸 알린다 */
   dirty?: boolean;
+  account?: { walletBalance: number; availableBalance: number; unrealizedPnl: number } | null;
 }
 
 const LEVERAGE_MARKS = [1, 25, 50, 75, 100];
@@ -44,13 +45,44 @@ export function BotPanel({
   disabled,
   error,
   dirty,
+  account,
 }: Props) {
   const [tab, setTab] = useState<'basic' | 'strategy'>('basic');
   const set = <K extends keyof BotConfig>(k: K, v: BotConfig[K]) => onChange({ ...config, [k]: v });
   const running = status === 'running';
 
+  // 진입 시 실제로 얼마가 들어가는지 미리 보여준다 — %만 보면 감이 안 온다.
+  const estimatedMargin = account ? (account.availableBalance * config.positionSizePct) / 100 : null;
+
   return (
-    <aside className="flex w-full flex-col gap-4 border-l border-line bg-panel p-4 lg:w-[320px] lg:shrink-0">
+    <aside className="flex w-full flex-col gap-4 overflow-y-auto border-l border-line bg-panel p-4 lg:w-[320px] lg:shrink-0">
+      {/* 테스트넷 자산 — KuCoin Lite의 "USDT자산" 섹션 */}
+      {account && (
+        <div className="space-y-1.5 rounded bg-canvas p-3">
+          <div className="flex items-baseline justify-between">
+            <span className="text-[11px] text-muted">테스트넷 자산</span>
+            <span className="font-mono text-sm font-semibold text-ink">
+              {account.walletBalance.toLocaleString('ko-KR', { maximumFractionDigits: 2 })} USDT
+            </span>
+          </div>
+          <div className="flex items-baseline justify-between">
+            <span className="text-[11px] text-faint">사용 가능</span>
+            <span className="font-mono text-[11px] text-muted">
+              {account.availableBalance.toLocaleString('ko-KR', { maximumFractionDigits: 2 })}
+            </span>
+          </div>
+          <div className="flex items-baseline justify-between">
+            <span className="text-[11px] text-faint">미실현 손익</span>
+            <span
+              className={`font-mono text-[11px] ${account.unrealizedPnl >= 0 ? 'text-long' : 'text-short'}`}
+            >
+              {account.unrealizedPnl >= 0 ? '+' : '−'}
+              {Math.abs(account.unrealizedPnl).toLocaleString('ko-KR', { maximumFractionDigits: 2 })}
+            </span>
+          </div>
+        </div>
+      )}
+
       {/* 탭 — 기본 / 전략 */}
       <div className="flex gap-1 rounded bg-canvas p-1">
         {(
@@ -78,7 +110,12 @@ export function BotPanel({
           <div className="space-y-2">
             <div className="flex items-baseline justify-between">
               <span className="text-xs text-muted">진입 규모</span>
-              <span className="font-mono text-xs text-muted">잔고의 {config.positionSizePct}%</span>
+              {/* %만 보면 실제 금액 감이 안 오므로 환산해서 같이 보여준다 */}
+              <span className="font-mono text-xs text-muted">
+                {estimatedMargin !== null
+                  ? `약 ${estimatedMargin.toLocaleString('ko-KR', { maximumFractionDigits: 0 })} USDT`
+                  : `잔고의 ${config.positionSizePct}%`}
+              </span>
             </div>
             <input
               type="number"
