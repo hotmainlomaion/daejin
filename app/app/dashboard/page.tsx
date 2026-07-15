@@ -1,32 +1,23 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { BotControls } from '@/components/BotControls';
-import { TestnetNotice } from '@/components/TestnetNotice';
+import { MA_CROSSOVER_DEFAULTS } from '@futureslab/shared';
+import { Terminal, type TerminalBot } from '@/components/Terminal';
+import type { PositionView, TradeView } from '@/components/BottomTabs';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 
-// 워커가 DB를 갱신하므로 캐시하지 않는다. MVP는 폴링 대신 요청마다 최신값을 읽는다.
+// 워커가 DB를 갱신하므로 캐시하지 않는다.
 export const dynamic = 'force-dynamic';
-
-interface PositionRow {
-  symbol: string;
-  entry_price: number;
-  qty: number;
-  unrealized_pnl: number;
-  liquidation_price: number | null;
-}
 
 interface BotRow {
   id: string;
   symbol: string;
   timeframe: string;
   leverage: number;
-  status: string;
+  status: 'stopped' | 'running' | 'error';
   last_error: string | null;
-  strategies: { name: string } | null;
-  positions: PositionRow[];
+  strategies: { name: string; params: Record<string, unknown> } | null;
 }
 
-/** 성과 대시보드 (PRD F7): 포지션·손익·청산가·펀딩비. */
 export default async function DashboardPage() {
   const supabase = await createSupabaseServerClient();
   const {
@@ -39,129 +30,65 @@ export default async function DashboardPage() {
 
   const { data } = await supabase
     .from('bots')
-    .select('id, symbol, timeframe, leverage, status, last_error, strategies(name), positions(*)')
-    .order('created_at', { ascending: false });
+    .select('id, symbol, timeframe, leverage, status, last_error, strategies(name, params)')
+    .order('created_at', { ascending: false })
+    .limit(1);
 
-  const bots = (data ?? []) as unknown as BotRow[];
+  const row = (data?.[0] ?? null) as BotRow | null;
+  if (!row) redirect('/bots/new');
 
-  return (
-    <main className="space-y-8">
-      <header className="flex items-start justify-between">
-        <div className="space-y-1">
-          <h1 className="text-2xl font-semibold tracking-tight">대시보드</h1>
-          <p className="text-sm text-neutral-500">테스트넷에서 실행 중인 봇의 상태입니다.</p>
-        </div>
-        <Link
-          href="/bots/new"
-          className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-neutral-700"
-        >
-          봇 만들기
-        </Link>
-      </header>
+  const [{ data: positions }, { data: trades }] = await Promise.all([
+    supabase.from('positions').select('*').eq('bot_id', row.id),
+    supabase.from('trades').select('*').eq('bot_id', row.id).order('executed_at', { ascending: false }).limit(100),
+  ]);
 
-      <TestnetNotice />
+  const p = (row.strategies?.params ?? {}) as Record<string, unknown>;
+  const num = (k: string, fallback: number) => (typeof p[k] === 'number' ? (p[k] as number) : fallback);
 
-      {bots.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-neutral-300 px-6 py-16 text-center">
-          <p className="text-sm text-neutral-600">아직 만든 봇이 없습니다.</p>
-          <Link
-            href="/bots/new"
-            className="mt-3 inline-block text-sm font-medium text-neutral-900 underline underline-offset-4"
-          >
-            첫 봇 만들기
-          </Link>
-        </div>
-      ) : (
-        <ul className="space-y-4">
-          {bots.map((bot) => (
-            <BotCard key={bot.id} bot={bot} />
-          ))}
-        </ul>
-      )}
-    </main>
-  );
-}
-
-function BotCard({ bot }: { bot: BotRow }) {
-  const position = bot.positions[0] ?? null;
-
-  return (
-    <li className="space-y-4 rounded-lg border border-neutral-200 bg-white p-5">
-      <div className="flex items-start justify-between">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2">
-            <h2 className="text-base font-semibold">{bot.strategies?.name ?? '전략'}</h2>
-            <StatusBadge status={bot.status} />
-          </div>
-          <p className="text-sm text-neutral-500">
-            {bot.symbol} · {bot.timeframe} · {bot.leverage}x
-          </p>
-        </div>
-        <BotControls botId={bot.id} status={bot.status} />
-      </div>
-
-      {bot.status === 'error' && bot.last_error && (
-        <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-loss">{bot.last_error}</p>
-      )}
-
-      {bot.status === 'running' && !position && (
-        <p className="text-sm text-neutral-500">
-          포지션 없음 — 진입 조건을 기다리는 중입니다. 평가는 캔들 종가마다 이루어집니다.
-        </p>
-      )}
-
-      {position && (
-        <dl className="grid grid-cols-2 gap-4 border-t border-neutral-100 pt-4 sm:grid-cols-4">
-          <Stat label="방향" value={position.qty > 0 ? '롱' : '숏'} />
-          <Stat label="진입가" value={formatUsd(position.entry_price)} />
-          <Stat
-            label="미실현 손익"
-            value={formatSignedUsd(position.unrealized_pnl)}
-            tone={position.unrealized_pnl >= 0 ? 'profit' : 'loss'}
-          />
-          <Stat
-            label="청산가"
-            value={position.liquidation_price ? formatUsd(position.liquidation_price) : '—'}
-          />
-        </dl>
-      )}
-    </li>
-  );
-}
-
-function StatusBadge({ status }: { status: string }) {
-  const styles: Record<string, string> = {
-    running: 'bg-emerald-50 text-emerald-700',
-    stopped: 'bg-neutral-100 text-neutral-600',
-    error: 'bg-red-50 text-red-700',
+  const bot: TerminalBot = {
+    id: row.id,
+    name: row.strategies?.name ?? '전략',
+    symbol: row.symbol,
+    timeframe: row.timeframe,
+    status: row.status,
+    lastError: row.last_error,
+    config: {
+      positionSizePct: num('positionSizePct', MA_CROSSOVER_DEFAULTS.positionSizePct),
+      leverage: row.leverage,
+      stopLossPct: num('stopLossPct', MA_CROSSOVER_DEFAULTS.stopLossPct),
+      takeProfitPct: num('takeProfitPct', MA_CROSSOVER_DEFAULTS.takeProfitPct),
+      fastPeriod: num('fastPeriod', MA_CROSSOVER_DEFAULTS.fastPeriod),
+      slowPeriod: num('slowPeriod', MA_CROSSOVER_DEFAULTS.slowPeriod),
+      maType: p.maType === 'SMA' ? 'SMA' : 'EMA',
+      onDeadCross: p.onDeadCross === 'SHORT' ? 'SHORT' : 'CLOSE_ONLY',
+    },
   };
-  const labels: Record<string, string> = {
-    running: '실행 중',
-    stopped: '정지',
-    error: '오류',
-  };
+
+  const positionViews: PositionView[] = (positions ?? []).map((x) => ({
+    symbol: x.symbol,
+    qty: Number(x.qty),
+    entryPrice: Number(x.entry_price),
+    unrealizedPnl: Number(x.unrealized_pnl),
+    liquidationPrice: x.liquidation_price === null ? null : Number(x.liquidation_price),
+  }));
+
+  const tradeViews: TradeView[] = (trades ?? []).map((x) => ({
+    side: x.side,
+    price: Number(x.price),
+    qty: Number(x.qty),
+    executedAt: x.executed_at,
+  }));
+
   return (
-    <span className={`rounded px-2 py-0.5 text-xs font-medium ${styles[status] ?? styles.stopped}`}>
-      {labels[status] ?? status}
-    </span>
+    <>
+      <Terminal bot={bot} positions={positionViews} trades={tradeViews} />
+      {/* 봇이 하나뿐인 MVP라 목록 화면 대신 새 봇 만들기 링크만 둔다 */}
+      <Link
+        href="/bots/new"
+        className="fixed bottom-3 left-4 z-10 text-[11px] text-faint hover:text-ink"
+      >
+        + 새 봇 만들기
+      </Link>
+    </>
   );
-}
-
-function Stat({ label, value, tone }: { label: string; value: string; tone?: 'profit' | 'loss' }) {
-  const toneClass = tone === 'profit' ? 'text-profit' : tone === 'loss' ? 'text-loss' : 'text-neutral-900';
-  return (
-    <div className="space-y-1">
-      <dt className="text-xs text-neutral-500">{label}</dt>
-      <dd className={`text-sm font-medium tabular-nums ${toneClass}`}>{value}</dd>
-    </div>
-  );
-}
-
-function formatUsd(value: number): string {
-  return `$${value.toLocaleString('ko-KR', { maximumFractionDigits: 2 })}`;
-}
-
-function formatSignedUsd(value: number): string {
-  const sign = value >= 0 ? '+' : '−';
-  return `${sign}$${Math.abs(value).toLocaleString('ko-KR', { maximumFractionDigits: 2 })}`;
 }

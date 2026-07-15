@@ -19,10 +19,10 @@ export default async function NewBotPage() {
   if (!keys || keys.length === 0) redirect('/keys');
 
   return (
-    <main className="max-w-2xl space-y-8">
+    <main className="mx-auto max-w-md space-y-8 px-6 py-16">
       <header className="space-y-2">
-        <h1 className="text-2xl font-semibold tracking-tight">봇 만들기</h1>
-        <p className="text-sm text-neutral-600">
+        <h1 className="text-2xl font-semibold tracking-tight text-ink">봇 만들기</h1>
+        <p className="text-sm text-muted">
           이평선 교차 전략의 파라미터를 설정합니다. 값은 언제든 바꿔서 다시 검증할 수 있습니다.
         </p>
       </header>

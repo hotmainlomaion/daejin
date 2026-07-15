@@ -5,7 +5,7 @@ import { registerExchangeKey, type ActionResult } from '@/app/actions';
 import { FormError } from '@/components/FormError';
 
 const inputClass =
-  'w-full rounded-md border border-neutral-300 px-3 py-2 text-sm outline-none focus:border-neutral-900';
+  'w-full rounded border border-line bg-canvas px-3 py-2 text-sm outline-none focus:border-brand';
 
 /**
  * 테스트넷 키 입력 폼.
@@ -21,14 +21,14 @@ export function KeyForm() {
   return (
     <form action={formAction} className="space-y-4">
       <div className="space-y-1.5">
-        <label htmlFor="label" className="block text-sm font-medium text-neutral-700">
+        <label htmlFor="label" className="block text-sm text-muted">
           라벨
         </label>
         <input id="label" name="label" defaultValue="테스트넷 키" className={inputClass} />
       </div>
 
       <div className="space-y-1.5">
-        <label htmlFor="apiKey" className="block text-sm font-medium text-neutral-700">
+        <label htmlFor="apiKey" className="block text-sm text-muted">
           API Key
         </label>
         <input
@@ -42,7 +42,7 @@ export function KeyForm() {
       </div>
 
       <div className="space-y-1.5">
-        <label htmlFor="secret" className="block text-sm font-medium text-neutral-700">
+        <label htmlFor="secret" className="block text-sm text-muted">
           Secret Key
         </label>
         {/* type=password로 어깨너머 노출을 막는다. 저장 후에는 다시 표시하지 않는다. */}
@@ -59,7 +59,7 @@ export function KeyForm() {
 
       <FormError state={state} />
 
-      <p className="text-xs leading-relaxed text-neutral-500">
+      <p className="text-xs leading-relaxed text-faint">
         입력한 키는 서버에서 암호화되어 저장되며, 복호화는 주문을 실행하는 워커에서만 이루어집니다.
         등록 후에는 화면에 다시 표시되지 않습니다.
       </p>
@@ -67,7 +67,7 @@ export function KeyForm() {
       <button
         type="submit"
         disabled={pending}
-        className="rounded-md bg-neutral-900 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-neutral-700 disabled:opacity-50"
+        className="rounded bg-brand px-5 py-2.5 text-sm font-semibold text-canvas transition hover:brightness-110 disabled:opacity-40"
       >
         {pending ? '등록 중…' : '키 등록'}
       </button>

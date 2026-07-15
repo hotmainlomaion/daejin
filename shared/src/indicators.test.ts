@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ema, sma } from './indicators.ts';
+import { ema, maSeries, sma } from './indicators.ts';
 
 describe('sma', () => {
   it('마지막 period개의 산술 평균을 낸다', () => {
@@ -42,5 +42,24 @@ describe('ema', () => {
 
   it('데이터가 부족하면 null', () => {
     expect(ema([1, 2], 3)).toBeNull();
+  });
+});
+
+describe('maSeries', () => {
+  it('데이터가 부족한 앞 구간은 null', () => {
+    expect(maSeries([1, 2, 3, 4], 3, 'SMA')).toEqual([null, null, 2, 3]);
+  });
+
+  it('각 시점 값이 전략이 쓰는 movingAverage와 일치한다', () => {
+    // 차트 선과 봇 판단이 어긋나면 안 되므로 이 성질이 핵심이다
+    const values = [10, 12, 11, 15, 14, 18, 20];
+    const series = maSeries(values, 3, 'EMA');
+    for (let i = 0; i < values.length; i++) {
+      expect(series[i]).toBe(ema(values.slice(0, i + 1), 3));
+    }
+  });
+
+  it('길이가 입력과 같다', () => {
+    expect(maSeries([1, 2, 3, 4, 5], 2, 'SMA')).toHaveLength(5);
   });
 });

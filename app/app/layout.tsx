@@ -11,9 +11,9 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="ko">
-      <body>
-        <div className="mx-auto min-h-screen max-w-5xl px-6 py-10">{children}</div>
-      </body>
+      {/* 터미널 화면이 전체 높이를 쓰므로 여기서 폭을 제한하지 않는다.
+          각 페이지가 자기 컨테이너를 책임진다. */}
+      <body className="min-h-screen">{children}</body>
     </html>
   );
 }

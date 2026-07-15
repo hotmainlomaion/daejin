@@ -8,7 +8,16 @@ export type {
   SignalAction,
 } from './types.ts';
 
-export { ema, movingAverage, sma } from './indicators.ts';
+export { ema, maSeries, movingAverage, sma } from './indicators.ts';
+export {
+  ALLOWED_REST_HOSTS,
+  ALLOWED_WS_HOSTS,
+  assertTestnetUrl,
+  DEFAULT_REST_BASE,
+  DEFAULT_WS_BASE,
+  resolveRestBase,
+  resolveWsBase,
+} from './testnet.ts';
 export { checkStopLossTakeProfit } from './risk.ts';
 export { evaluateMaCrossover, validateMaCrossoverParams } from './strategies/ma-crossover.ts';
 

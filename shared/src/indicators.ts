@@ -43,3 +43,18 @@ export function movingAverage(
 ): number | null {
   return maType === 'SMA' ? sma(values, period) : ema(values, period);
 }
+
+/**
+ * 각 시점의 이동평균을 배열로. 차트 오버레이용.
+ *
+ * ⚠️ 전략이 쓰는 `movingAverage()`를 그대로 호출한다 — 차트에 그려지는 선과
+ * 봇이 판단에 쓰는 값이 반드시 같아야 하므로 계산을 따로 구현하지 않는다.
+ * 데이터가 부족한 앞 구간은 null (차트에서 선이 시작되지 않는다).
+ */
+export function maSeries(
+  values: readonly number[],
+  period: number,
+  maType: 'SMA' | 'EMA',
+): (number | null)[] {
+  return values.map((_, i) => movingAverage(values.slice(0, i + 1), period, maType));
+}

@@ -17,10 +17,10 @@ export default async function KeysPage() {
   if (!user) redirect('/login');
 
   return (
-    <main className="max-w-2xl space-y-8">
+    <main className="mx-auto max-w-2xl space-y-8 px-6 py-16">
       <header className="space-y-2">
-        <h1 className="text-2xl font-semibold tracking-tight">테스트넷 API 키 등록</h1>
-        <p className="text-sm leading-relaxed text-neutral-600">
+        <h1 className="text-2xl font-semibold tracking-tight text-ink">테스트넷 API 키 등록</h1>
+        <p className="text-sm leading-relaxed text-muted">
           봇이 주문을 넣으려면 바이낸스 테스트넷 키가 필요합니다. 테스트넷 키는 실제 자금에 접근할 수
           없습니다.
         </p>
@@ -28,15 +28,15 @@ export default async function KeysPage() {
 
       <TestnetNotice />
 
-      <section className="space-y-3 rounded-lg border border-neutral-200 bg-white p-5">
-        <h2 className="text-sm font-semibold text-neutral-900">키 발급 방법</h2>
-        <ol className="list-decimal space-y-2 pl-5 text-sm leading-relaxed text-neutral-600">
+      <section className="space-y-3 rounded border border-line bg-panel p-5">
+        <h2 className="text-sm font-semibold text-ink">키 발급 방법</h2>
+        <ol className="list-decimal space-y-2 pl-5 text-sm leading-relaxed text-muted">
           <li>
             <a
               href="https://testnet.binancefuture.com"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-neutral-900 underline underline-offset-2"
+              className="text-brand underline underline-offset-2"
             >
               testnet.binancefuture.com
             </a>

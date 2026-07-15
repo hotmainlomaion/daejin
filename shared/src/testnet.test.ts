@@ -1,7 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { __testing } from './config.ts';
-
-const { assertTestnetUrl, ALLOWED_REST_HOSTS, ALLOWED_WS_HOSTS } = __testing;
+import { ALLOWED_REST_HOSTS, ALLOWED_WS_HOSTS, assertTestnetUrl, resolveRestBase } from './testnet.ts';
 
 /**
  * 이 테스트가 지키는 것: CLAUDE.md 가드레일 1 (메인넷 연동 금지).
@@ -54,5 +52,14 @@ describe('assertTestnetUrl — 메인넷 차단', () => {
 
   it('해석 불가한 주소는 throw', () => {
     expect(() => assertTestnetUrl('not-a-url', ALLOWED_REST_HOSTS, 'REST')).toThrow(/해석할 수 없/);
+  });
+
+  it('환경변수가 없으면 테스트넷 기본값을 쓴다', () => {
+    expect(resolveRestBase(undefined)).toBe('https://demo-fapi.binance.com');
+    expect(resolveRestBase('')).toBe('https://demo-fapi.binance.com');
+  });
+
+  it('resolveRestBase도 메인넷을 거부한다', () => {
+    expect(() => resolveRestBase('https://fapi.binance.com')).toThrow(/테스트넷이 아닙니다/);
   });
 });

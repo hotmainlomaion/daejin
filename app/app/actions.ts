@@ -138,6 +138,68 @@ export async function createBot(
 }
 
 /**
+ * 터미널 봇 패널에서 바꾼 설정을 저장한다.
+ *
+ * 레버리지는 bots에, 나머지 전략 파라미터는 strategies.params에 들어간다.
+ * 실행 중에 바꾸면 워커가 다음 기동 때 읽으므로, 즉시 반영하려면 재시작이 필요하다.
+ */
+export async function saveBotConfig(
+  botId: string,
+  config: {
+    positionSizePct: number;
+    leverage: number;
+    stopLossPct: number;
+    takeProfitPct: number;
+    fastPeriod: number;
+    slowPeriod: number;
+    maType: 'SMA' | 'EMA';
+    onDeadCross: 'SHORT' | 'CLOSE_ONLY';
+  },
+): Promise<ActionResult> {
+  const { supabase } = await requireUser();
+
+  if (!Number.isFinite(config.leverage) || config.leverage < 1 || config.leverage > 125) {
+    return { error: '레버리지는 1~125 사이여야 합니다.' };
+  }
+  if (config.positionSizePct <= 0 || config.positionSizePct > 100) {
+    return { error: '진입 규모는 0보다 크고 100% 이하여야 합니다.' };
+  }
+
+  // RLS가 남의 봇을 막아준다. 봇의 전략 id는 서버에서 다시 조회해 신뢰한다.
+  const { data: bot, error: botErr } = await supabase
+    .from('bots')
+    .select('strategy_id, symbol, timeframe')
+    .eq('id', botId)
+    .single();
+  if (botErr || !bot) return { error: '봇을 찾을 수 없습니다.' };
+
+  const params: MaCrossoverParams = {
+    symbol: bot.symbol,
+    timeframe: bot.timeframe,
+    leverage: config.leverage,
+    positionSizePct: config.positionSizePct,
+    stopLossPct: config.stopLossPct,
+    takeProfitPct: config.takeProfitPct,
+    fastPeriod: config.fastPeriod,
+    slowPeriod: config.slowPeriod,
+    maType: config.maType,
+    onDeadCross: config.onDeadCross,
+  };
+
+  const invalid = validateMaCrossoverParams(params);
+  if (invalid) return { error: invalid };
+
+  const [{ error: e1 }, { error: e2 }] = await Promise.all([
+    supabase.from('strategies').update({ params }).eq('id', bot.strategy_id),
+    supabase.from('bots').update({ leverage: config.leverage }).eq('id', botId),
+  ]);
+  if (e1 || e2) return { error: '설정 저장에 실패했습니다.' };
+
+  revalidatePath('/dashboard');
+  return { ok: true };
+}
+
+/**
  * 봇 시작/정지.
  * 웹앱은 status만 바꾼다 — 워커를 직접 호출하지 않는다 (CLAUDE.md 아키텍처 규칙).
  * 워커가 이 값을 폴링해서 실제로 띄우고 내린다.

@@ -4,7 +4,7 @@ import type { ActionResult } from '@/app/actions';
 export function FormError({ state }: { state: ActionResult | null }) {
   if (!state || !('error' in state)) return null;
   return (
-    <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-loss" role="alert">
+    <p className="rounded bg-short/10 px-3 py-2 text-sm text-short" role="alert">
       {state.error}
     </p>
   );
