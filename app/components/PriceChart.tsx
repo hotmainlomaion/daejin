@@ -46,8 +46,10 @@ interface Props {
   slowPeriod: number;
   maType: 'SMA' | 'EMA';
   trades?: TradeMarker[];
-  mainIndicator?: MainIndicator;
-  subIndicator?: SubIndicator;
+  /** 가격 위에 겹쳐 그릴 지표들 (여러 개 동시 가능) */
+  mainIndicators?: readonly MainIndicator[];
+  /** 각각 독립 패인으로 아래에 쌓일 지표들 (여러 개 동시 가능) */
+  subIndicators?: readonly SubIndicator[];
 }
 
 const COLOR = {
@@ -81,8 +83,8 @@ export function PriceChart({
   slowPeriod,
   maType,
   trades = [],
-  mainIndicator = 'none',
-  subIndicator = 'volume',
+  mainIndicators = [],
+  subIndicators = ['volume'],
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
@@ -169,8 +171,9 @@ export function PriceChart({
     setLine(line({ color: COLOR.fast, title: `${maType} ${fastPeriod}` }), maSeries(closes, fastPeriod, maType));
     setLine(line({ color: COLOR.slow, title: `${maType} ${slowPeriod}` }), maSeries(closes, slowPeriod, maType));
 
-    // ── 메인 지표 (가격 위 오버레이) ──────────────────────
-    switch (mainIndicator) {
+    // ── 메인 지표 (가격 위 오버레이) — 여러 개를 겹쳐 그린다 ──
+    for (const ind of mainIndicators) {
+      switch (ind) {
       case 'wma':
         setLine(line({ color: COLOR.a, title: 'WMA 20' }), wmaSeries(closes, 20));
         break;
@@ -187,25 +190,28 @@ export function PriceChart({
       case 'avl':
         setLine(line({ color: COLOR.b, title: 'AVL' }), avlSeries(candles));
         break;
-      case 'sar': {
-        // SAR은 선이 아니라 점 — 캔들 위아래를 오가므로 선으로 이으면 오해를 준다
-        const sar = chart.addSeries(LineSeries, {
-          color: COLOR.c,
-          lineWidth: 1,
-          lineVisible: false,
-          pointMarkersVisible: true,
-          priceLineVisible: false,
-          lastValueVisible: false,
-          title: 'SAR',
-        });
-        setLine(sar, sarSeries(candles));
-        break;
+        case 'sar': {
+          // SAR은 선이 아니라 점 — 캔들 위아래를 오가므로 선으로 이으면 오해를 준다
+          const sar = chart.addSeries(LineSeries, {
+            color: COLOR.c,
+            lineWidth: 1,
+            lineVisible: false,
+            pointMarkersVisible: true,
+            priceLineVisible: false,
+            lastValueVisible: false,
+            title: 'SAR',
+          });
+          setLine(sar, sarSeries(candles));
+          break;
+        }
       }
     }
 
-    // ── 서브 지표 (별도 패인) ─────────────────────────────
-    const P = 1; // 서브 패인 인덱스
-    switch (subIndicator) {
+    // ── 서브 지표 — 선택한 만큼 패인을 아래로 쌓는다 ──────
+    // 패인 0은 가격이므로 서브는 1번부터. 각 지표가 자기 패인을 하나씩 가진다.
+    subIndicators.forEach((ind, idx) => {
+      const P = idx + 1;
+      switch (ind) {
       case 'volume': {
         const vol = chart.addSeries(
           HistogramSeries,
@@ -282,9 +288,10 @@ export function PriceChart({
       case 'emv':
         setLine(line({ color: COLOR.a, title: 'EMV 14', pane: P }), emvSeries(candles));
         break;
-    }
+      }
 
-    if (subIndicator !== 'none') chart.panes()[P]?.setHeight(SUB_PANE_HEIGHT);
+      chart.panes()[P]?.setHeight(SUB_PANE_HEIGHT);
+    });
 
     // ── 봇의 실제 체결 지점 ────────────────────────────────
     if (trades.length > 0) {
@@ -309,7 +316,7 @@ export function PriceChart({
       chart.remove();
       chartRef.current = null;
     };
-  }, [candles, fastPeriod, slowPeriod, maType, trades, mainIndicator, subIndicator]);
+  }, [candles, fastPeriod, slowPeriod, maType, trades, mainIndicators, subIndicators]);
 
   if (candles.length === 0) {
     return (

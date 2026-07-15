@@ -73,8 +73,9 @@ export function Terminal({
   const [pending, setPending] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [subIndicator, setSubIndicator] = useState<SubIndicator>('volume');
-  const [mainIndicator, setMainIndicator] = useState<MainIndicator>('none');
+  // 거래소처럼 여러 지표를 동시에 켠다. 서브는 선택한 순서대로 패인이 아래로 쌓인다.
+  const [subIndicators, setSubIndicators] = useState<SubIndicator[]>(['volume']);
+  const [mainIndicators, setMainIndicators] = useState<MainIndicator[]>([]);
 
   const { events, connected } = useBotStream(bot.id, initialEvents);
 
@@ -252,49 +253,51 @@ export function Terminal({
               </span>
             )}
 
-            {/* 지표 — 바이낸스 자체 메뉴 기준(19종).
+            {/* 지표 — 바이낸스 자체 메뉴 기준(19종). 거래소처럼 **여러 개를 동시에** 켠다.
                 참고용 시각화이며 봇의 판단에는 쓰이지 않는다 (가드레일 2). */}
-            <div className="ml-auto flex items-center gap-2">
-              <label className="flex items-center gap-1">
+            <div className="ml-auto flex flex-wrap items-center justify-end gap-x-3 gap-y-1">
+              <div className="flex items-center gap-1">
                 <span className="text-[10px] text-faint">메인</span>
-                <select
-                  value={mainIndicator}
-                  onChange={(e) => setMainIndicator(e.target.value as MainIndicator)}
-                  className="rounded bg-elevated px-1.5 py-1 text-xs outline-none"
-                  title={mainMeta(mainIndicator).desc}
-                >
-                  {MAIN_INDICATORS.map(({ key, meta }) => (
-                    <option key={key} value={key}>
-                      {meta.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="flex items-center gap-1">
+                {MAIN_INDICATORS.map(({ key, meta }) => (
+                  <Chip
+                    key={key}
+                    label={meta.label}
+                    title={meta.desc}
+                    on={mainIndicators.includes(key)}
+                    onClick={() => setMainIndicators(toggle(mainIndicators, key))}
+                  />
+                ))}
+              </div>
+              <div className="flex items-center gap-1">
                 <span className="text-[10px] text-faint">보조</span>
-                <select
-                  value={subIndicator}
-                  onChange={(e) => setSubIndicator(e.target.value as SubIndicator)}
-                  className="rounded bg-elevated px-1.5 py-1 text-xs outline-none"
-                  title={subMeta(subIndicator).desc}
-                >
-                  {SUB_INDICATORS.map(({ key, meta }) => (
-                    <option key={key} value={key}>
-                      {meta.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
+                {SUB_INDICATORS.map(({ key, meta }) => (
+                  <Chip
+                    key={key}
+                    label={meta.label}
+                    title={meta.desc}
+                    on={subIndicators.includes(key)}
+                    onClick={() => setSubIndicators(toggle(subIndicators, key))}
+                  />
+                ))}
+              </div>
             </div>
           </div>
 
-          {/* 선택한 지표가 무엇을 계산하는지 — 매매 판단은 말하지 않는다 (가드레일 2·3) */}
-          {(mainIndicator !== 'none' || subIndicator !== 'none') && (
-            <p className="border-b border-line px-4 py-1 text-[10px] leading-relaxed text-faint">
-              {mainIndicator !== 'none' && <>{mainMeta(mainIndicator).label}: {mainMeta(mainIndicator).desc}</>}
-              {mainIndicator !== 'none' && subIndicator !== 'none' && ' · '}
-              {subIndicator !== 'none' && <>{subMeta(subIndicator).label}: {subMeta(subIndicator).desc}</>}
-            </p>
+          {/* 켜둔 지표가 무엇을 계산하는지 — 매매 판단은 말하지 않는다 (가드레일 2·3) */}
+          {(mainIndicators.length > 0 || subIndicators.length > 0) && (
+            <div className="border-b border-line px-4 py-1">
+              <p className="text-[10px] leading-relaxed text-faint">
+                {[
+                  ...mainIndicators.map((k) => `${mainMeta(k).label}: ${mainMeta(k).desc}`),
+                  ...subIndicators.map((k) => `${subMeta(k).label}: ${subMeta(k).desc}`),
+                ].join(' · ')}
+              </p>
+              {subIndicators.length > 3 && (
+                <p className="mt-0.5 text-[10px] text-[#f0b90b]">
+                  보조지표를 {subIndicators.length}개 켜면 각 패인이 좁아져 읽기 어려워집니다.
+                </p>
+              )}
+            </div>
           )}
 
           <div className="min-h-[280px] flex-1">
@@ -309,8 +312,8 @@ export function Terminal({
                 slowPeriod={config.slowPeriod}
                 maType={config.maType}
                 trades={markers}
-                mainIndicator={mainIndicator}
-                subIndicator={subIndicator}
+                mainIndicators={mainIndicators}
+                subIndicators={subIndicators}
               />
             )}
           </div>
@@ -353,6 +356,37 @@ export function Terminal({
         <TestnetNotice variant="inline" />
       </footer>
     </div>
+  );
+}
+
+/** 배열에서 값을 켜고 끈다. 켜는 순서가 곧 패인 순서라 push로 붙인다. */
+function toggle<T>(list: T[], value: T): T[] {
+  return list.includes(value) ? list.filter((x) => x !== value) : [...list, value];
+}
+
+function Chip({
+  label,
+  title,
+  on,
+  onClick,
+}: {
+  label: string;
+  title: string;
+  on: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={title}
+      aria-pressed={on}
+      className={`rounded px-1.5 py-0.5 text-[11px] transition ${
+        on ? 'bg-brand/20 text-brand' : 'text-muted hover:bg-elevated hover:text-ink'
+      }`}
+    >
+      {label}
+    </button>
   );
 }
 

@@ -13,11 +13,10 @@
  */
 
 /** 가격 차트 위에 겹쳐 그리는 지표 */
-export type MainIndicator = 'none' | 'wma' | 'boll' | 'vwap' | 'avl' | 'sar';
+export type MainIndicator = 'wma' | 'boll' | 'vwap' | 'avl' | 'sar';
 
 /** 아래 별도 패인에 그리는 지표 */
 export type SubIndicator =
-  | 'none'
   | 'volume'
   | 'macd'
   | 'rsi'
@@ -38,7 +37,6 @@ interface Meta {
 }
 
 export const MAIN_INDICATORS: { key: MainIndicator; meta: Meta }[] = [
-  { key: 'none', meta: { label: '없음', desc: '전략 이평선만 표시합니다.' } },
   {
     key: 'wma',
     meta: { label: 'WMA', desc: '가중이동평균 — 최근 값에 더 큰 가중치를 주는 평균선입니다.' },
@@ -65,7 +63,6 @@ export const MAIN_INDICATORS: { key: MainIndicator; meta: Meta }[] = [
 ];
 
 export const SUB_INDICATORS: { key: SubIndicator; meta: Meta }[] = [
-  { key: 'none', meta: { label: '없음', desc: '보조 패인을 숨깁니다.' } },
   { key: 'volume', meta: { label: '거래량', desc: '캔들별 거래량입니다.' } },
   {
     key: 'macd',
