@@ -1,0 +1,20 @@
+node_modules/
+.next/
+dist/
+out/
+build/
+
+# 환경변수 — 시크릿은 절대 커밋하지 않는다 (CLAUDE.md 보안 가드레일 7·8)
+.env
+.env.*
+!.env.example
+
+.DS_Store
+*.log
+npm-debug.log*
+coverage/
+.vercel
+*.tsbuildinfo
+
+# 문서 원본 아카이브 (내용은 루트 md와 동일)
+files.zip

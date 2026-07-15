@@ -1,0 +1,20 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "lib": ["ES2022"],
+    "types": ["node"],
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "exactOptionalPropertyTypes": true,
+    "verbatimModuleSyntax": true,
+    "skipLibCheck": true,
+    // 앱(transpilePackages)과 워커(Node 타입 스트리핑) 모두 TS 소스를 그대로 소비하므로
+    // 이 패키지는 빌드 산출물을 내지 않는다. 상대 경로 import는 .ts 확장자를 그대로 쓴다.
+    "allowImportingTsExtensions": true,
+    "noEmit": true
+  },
+  "include": ["src"]
+}

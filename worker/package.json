@@ -1,0 +1,22 @@
+{
+  "name": "@futureslab/worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node --env-file-if-exists=../.env --experimental-strip-types src/index.ts",
+    "dev": "node --watch --env-file-if-exists=../.env --experimental-strip-types src/index.ts",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@futureslab/shared": "*",
+    "@supabase/supabase-js": "^2.47.10",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@types/ws": "^8.5.13",
+    "vitest": "^2.1.8"
+  }
+}
