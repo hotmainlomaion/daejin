@@ -92,9 +92,12 @@ create table public.positions (
 create unique index positions_bot_symbol_key on public.positions (bot_id, symbol);
 
 -- ── updated_at 자동 갱신 ────────────────────────────────
+-- search_path를 고정한다. 비워두지 않으면 호출자의 search_path를 따라가
+-- 동명의 악의적 객체가 우선 해석될 수 있다 (Supabase security linter 0011).
 create or replace function public.touch_updated_at()
 returns trigger
 language plpgsql
+set search_path = ''
 as $$
 begin
   new.updated_at = now();
