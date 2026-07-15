@@ -9,6 +9,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.111.0",
     "@futureslab/shared": "*",
     "@supabase/ssr": "^0.5.2",
     "@supabase/supabase-js": "^2.47.10",

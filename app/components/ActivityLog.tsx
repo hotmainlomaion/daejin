@@ -2,6 +2,7 @@
 
 import { useMemo } from 'react';
 import type { BotEvent } from '@futureslab/shared';
+import { ExplainButton } from '@/components/ExplainButton';
 
 /**
  * 봇 활동 로그 — 이 화면의 존재 이유에 가장 가까운 패널.
@@ -24,7 +25,7 @@ interface Group {
   oldest: BotEvent;
 }
 
-export function ActivityLog({ events }: { events: BotEvent[] }) {
+export function ActivityLog({ events, botId }: { events: BotEvent[]; botId: string }) {
   // events는 최신순으로 들어온다. 연속으로 같은 (action, reason)이면 하나로 묶는다.
   const groups = useMemo<Group[]>(() => {
     const out: Group[] = [];
@@ -70,6 +71,9 @@ export function ActivityLog({ events }: { events: BotEvent[] }) {
                 </span>
               )}
             </p>
+            {/* 대기(HOLD)는 해설할 게 없다 — 실제로 뭔가 일어난 항목에만 붙인다.
+                자동 호출이 아니라 유저가 눌러야 부른다 (비용). */}
+            {g.action !== 'HOLD' && <ExplainButton botId={botId} eventId={g.latest.id} />}
           </div>
         </li>
       ))}

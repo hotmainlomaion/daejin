@@ -326,6 +326,7 @@ export function Terminal({
               connected={connected}
               botError={bot.lastError}
               watch={{
+                botId: bot.id,
                 candles,
                 fastPeriod: config.fastPeriod,
                 slowPeriod: config.slowPeriod,

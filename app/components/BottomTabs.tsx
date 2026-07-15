@@ -39,6 +39,7 @@ export function BottomTabs({
   botError?: string | null;
   /** "봇의 눈" 탭에 필요한 값들 */
   watch: {
+    botId: string;
     candles: Candle[];
     fastPeriod: number;
     slowPeriod: number;
@@ -108,7 +109,7 @@ export function BottomTabs({
             status={watch.status}
           />
         ) : tab === 'activity' ? (
-          <ActivityLog events={events} />
+          <ActivityLog events={events} botId={watch.botId} />
         ) : tab === 'positions' ? (
           positions.length === 0 ? (
             <Empty text="보유 중인 포지션이 없습니다. 봇이 진입 조건을 기다리는 중입니다." />
